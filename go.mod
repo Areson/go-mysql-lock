@@ -1,4 +1,4 @@
-module github.com/sanketplus/go-mysql-lock
+module github.com/areson/go-mysql-lock
 
 go 1.13
 
