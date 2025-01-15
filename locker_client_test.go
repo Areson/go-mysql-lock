@@ -143,3 +143,31 @@ func TestMysqlLocker_Multiple_Release(t *testing.T) {
 	err := lock.Release()
 	assert.Equal(t, err, ErrLockReleased, "expected an error indicating that the lock was already released")
 }
+
+func TestMysqlLocker_MySQLWaitTimeout(t *testing.T) {
+	db := setupDB(t)
+	locker := NewMysqlLocker(db, WithRefreshInterval(time.Second*3), WithLockTimeoutSeconds(1))
+	key := "bar"
+
+	// obtain lock
+	ctxShort, cancelFunc := context.WithDeadline(context.Background(), time.Now().Add(time.Second))
+	defer cancelFunc()
+	lock, err := locker.ObtainContext(ctxShort, key)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case <-lock.lostLockContext.Done():
+	case <-time.After(time.Second * 5):
+		t.Error("lock was not lost after 5 seconds")
+	}
+
+	err = lock.Release()
+	if err == nil {
+		t.Error("expected error when releasing lock")
+	} else if err != ErrLockReleased {
+		t.Error("expected ErrLockReleased error when releasing lock")
+	}
+}

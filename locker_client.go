@@ -10,19 +10,25 @@ import (
 // DefaultRefreshInterval is the periodic duration with which a connection is refreshed/pinged
 const DefaultRefreshInterval = time.Second
 
+// DefaultLockTiemout is the number of seconds to set the MySQL wait_timeout to, which will cause the connection (and lock) to be closed after this duration
+// if there is no activity/heartbeat on the connection
+const DefaultLockTimeoutSeconds uint = 5
+
 type lockerOpt func(locker *MysqlLocker)
 
 // MysqlLocker is the client which provide APIs to obtain lock
 type MysqlLocker struct {
-	db              *sql.DB
-	refreshInterval time.Duration
+	db                 *sql.DB
+	refreshInterval    time.Duration
+	lockTimeoutSeconds uint
 }
 
 // NewMysqlLocker returns an instance of locker which can be used to obtain locks
 func NewMysqlLocker(db *sql.DB, lockerOpts ...lockerOpt) *MysqlLocker {
 	locker := &MysqlLocker{
-		db:              db,
-		refreshInterval: DefaultRefreshInterval,
+		db:                 db,
+		refreshInterval:    DefaultRefreshInterval,
+		lockTimeoutSeconds: DefaultLockTimeoutSeconds,
 	}
 
 	for _, opt := range lockerOpts {
@@ -35,6 +41,10 @@ func NewMysqlLocker(db *sql.DB, lockerOpts ...lockerOpt) *MysqlLocker {
 // WithRefreshInterval sets the duration for refresh interval for each obtained lock
 func WithRefreshInterval(d time.Duration) lockerOpt {
 	return func(l *MysqlLocker) { l.refreshInterval = d }
+}
+
+func WithLockTimeoutSeconds(d uint) lockerOpt {
+	return func(l *MysqlLocker) { l.lockTimeoutSeconds = d }
 }
 
 // Obtain tries to acquire lock (with no MySQL timeout) with background context. This call is expected to block is lock is already held
@@ -62,6 +72,7 @@ func (l MysqlLocker) ObtainTimeoutContext(ctx context.Context, key string, timeo
 		return nil, fmt.Errorf("failed to get a db connection: %w", err)
 	}
 
+	dbConn.ExecContext(ctx, "SET SESSION wait_timeout = ?", l.lockTimeoutSeconds)
 	row := dbConn.QueryRowContext(ctx, "SELECT GET_LOCK(?, ?)", key, timeout)
 
 	var res sql.NullInt32

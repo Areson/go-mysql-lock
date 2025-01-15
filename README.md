@@ -77,6 +77,13 @@ Obtained lock has a context which is cancelled if the lock is lost. This is dete
 context := lock.GetContext()
 ``` 
 
+#### Set A Server-Side Timeout On The Lock
+Locks that are orphaned due to an unexpected failure or heartbeats being delayed will be automatically closed by the MySQL server after a period of inactivity (default 5 seconds). To configure the timeout
+```go
+locker := gomysqllock.NewMysqlLocker(db, gomysqllock.WithLockTimeoutSeconds(2)
+```
+This should be used in conjunction with `WithRefreshInterval` and should be _longer_ than the refresh interval.
+
 ### Compatibility
 
 This library is tested (automatically) against MySQL 8 and MariaDB 10.1, and it should work for MariaDB versions >= 10.1, MySQL versions >= 5.6, and Vitess versions >= 15.0.
